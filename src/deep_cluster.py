@@ -1,11 +1,12 @@
 import os
+import shutil
 import torch
 import torchvision.transforms as transforms
 from torchvision import datasets
 from torch.utils.data import DataLoader, Subset
 from sklearn.cluster import DBSCAN, KMeans
 import hdbscan
-from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score, accuracy_score, pairwise
+from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score
 import numpy as np
 from tqdm import tqdm
 import random
@@ -56,6 +57,7 @@ class DeepCluster:
             subset_size = max(1, int(len(indices) * fraction))
             subset_indices.extend(random.sample(indices, subset_size))
 
+        self.subset_indices = subset_indices
         return Subset(dataset, subset_indices)
 
     def extract_features(self):
@@ -85,7 +87,7 @@ class DeepCluster:
                 self.params_list.append({'method': 'KMeans', 'n_clusters': self.n_clusters})
             case ClusterMethod.DBSCAN:
                 print("Performing DBSCAN clustering with multiple hyperparameters...")
-                eps_values = [1.5, 2,3,4,5,10]
+                eps_values = [1.5, 2, 3, 4, 5, 10]
                 min_samples_values = [5, 10, 15]
                 for eps in eps_values:
                     for min_samples in min_samples_values:
@@ -96,49 +98,95 @@ class DeepCluster:
                         self.params_list.append({'method': 'DBSCAN', 'eps': eps, 'min_samples': min_samples})
             case ClusterMethod.HDBSCAN:
                 print("Performing HDBSCAN clustering with multiple hyperparameters...")
-                min_cluster_sizes = [10]
-                min_samples_list = [1]
+                min_cluster_sizes = [5,15,30,60,100]
+                min_samples_list = [1,5,15,30,60,100]
                 for min_cluster_size in min_cluster_sizes:
                     for min_samples in min_samples_list:
                         print(f"  Trying min_cluster_size={min_cluster_size}, min_samples={min_samples}")
-                        self.hdbscan = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, min_samples=min_samples,metric="cosine")
+                        self.hdbscan = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, min_samples=min_samples)
                         labels = self.hdbscan.fit_predict(self.all_features)
                         self.labels_list.append(labels)
                         self.params_list.append({'method': 'HDBSCAN', 'min_cluster_size': min_cluster_size, 'min_samples': min_samples})
 
     def evaluate_clustering(self):
+        best_nmi = -1
+        best_labels = None
+        best_params = None
+        
         for i, labels in enumerate(self.labels_list):
             print(f"Evaluating clustering performance for params: {self.params_list[i]}")
             nmi = normalized_mutual_info_score(self.all_labels, labels)
             ari = adjusted_rand_score(self.all_labels, labels)
             print(f'  Normalized Mutual Information (NMI): {nmi:.4f}')
             print(f'  Adjusted Rand Index (ARI): {ari:.4f}')
+            
+            if nmi > best_nmi:
+                best_nmi = nmi
+                best_labels = labels
+                best_params = self.params_list[i]
+        
+        self.best_nmi = best_nmi
+        self.best_labels = best_labels
+        self.best_params = best_params
+        
+        print(f'Best NMI: {self.best_nmi:.4f} with params: {self.best_params}')
+
+    def save_cluster_images(self):
+        name = self.dataset_path.split("/")[-1]
+        cluster_dir = f"./dumps/{name}_clusters_{self.best_params['method']}"
+        os.makedirs(cluster_dir, exist_ok=True)
+        for cluster in set(self.best_labels):
+            cluster_path = os.path.join(cluster_dir, f"cluster_{cluster}")
+            os.makedirs(cluster_path, exist_ok=True)
+            cluster_indices = [idx for idx, label in zip(self.subset_indices, self.best_labels) if label == cluster]
+            for idx in cluster_indices:
+                src_path = self.dataset.samples[idx][0]
+                #print(f"Copying {src_path} to {cluster_path}") # zum debuggen
+                shutil.copy(src_path, cluster_path)
+        print(f"Saved images for clusters with params: {self.best_params} to {cluster_dir}")
 
     def visualize(self):
         print("Performing t-SNE visualization...")
         tsne = TSNE(n_components=2, random_state=42)
         tsne_features = tsne.fit_transform(self.all_features)
 
-        for i, labels in enumerate(self.labels_list):
-            plt.figure(figsize=(16, 7))
+        plt.figure(figsize=(16, 7))
 
-            # Plot true labels
-            plt.subplot(1, 2, 1)
-            sns.scatterplot(x=tsne_features[:, 0], y=tsne_features[:, 1], hue=[self.dataset.classes[label] for label in self.all_labels], palette=sns.color_palette("hsv", len(self.dataset.classes)), legend='full')
-            plt.title('t-SNE Visualization of True Labels')
-            plt.legend(title='Class', bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.subplot(1, 2, 1)
+        sns.scatterplot(
+            x=tsne_features[:, 0], 
+            y=tsne_features[:, 1], 
+            hue=[self.dataset.classes[label] for label in self.all_labels], 
+            palette=sns.color_palette("hsv", len(self.dataset.classes)), 
+            legend='full'
+        )
+        plt.title('t-SNE Visualization of True Labels')
+        plt.legend(title='Class', bbox_to_anchor=(1.05, 1), loc='upper left')
 
-            # Plot predicted labels based on cluster to class mapping
-            plt.subplot(1, 2, 2)
-            sns.scatterplot(x=tsne_features[:, 0], y=tsne_features[:, 1], hue=labels, palette=sns.color_palette("hsv", len(set(labels))), legend='full')
-            plt.title(f't-SNE Visualization of {self.params_list[i]} Clusters')
-            plt.legend(title='Cluster', bbox_to_anchor=(1.05, 1), loc='upper left')
+        best_labels_unique = list(set(self.best_labels))
+        best_labels_unique.sort()  
+        best_palette = sns.color_palette("hsv", len(best_labels_unique))
+        
+        if -1 in best_labels_unique:
+            best_palette = ['#000000' if label == -1 else color for label, color in zip(best_labels_unique, best_palette)]
 
-            plt.tight_layout()
-            plt.show()
+        plt.subplot(1, 2, 2)
+        sns.scatterplot(
+            x=tsne_features[:, 0], 
+            y=tsne_features[:, 1], 
+            hue=self.best_labels, 
+            palette=best_palette, 
+            legend='full'
+        )
+        plt.title(f't-SNE Visualization of {self.best_params} Clusters')
+        plt.legend(title='Cluster', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+        plt.tight_layout()
+        plt.show()
 
     def run_experiment(self):
         self.extract_features()
         self.perform_clustering()
         self.evaluate_clustering()
+        self.save_cluster_images()
         self.visualize()
