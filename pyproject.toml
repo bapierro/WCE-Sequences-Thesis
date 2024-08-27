@@ -27,6 +27,7 @@ easydict = "^1.13"
 termcolor = "^2.4.0"
 tqdm = "^4.66.4"
 gradio-imageslider = "^0.0.20"
+hdbscan = "^0.8.37"
 
 
 [build-system]
