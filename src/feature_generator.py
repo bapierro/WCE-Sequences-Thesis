@@ -1,13 +1,17 @@
+import os
 import torch
 import torch.nn as nn
 from torchvision.models import resnet18,resnet34,resnet50,resnet101,resnet152,ResNet18_Weights,ResNet34_Weights,ResNet50_Weights, ResNet
 from model_name import Model
 from EndoFM import vision_transformer
 from Depth_Anything_V2.depth_anything_v2.dpt import DepthAnythingV2
+import os
 
 
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+
+
 
 depth_anything_model_configs = {
     'vits': {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]},
@@ -23,11 +27,11 @@ depth_anything_encoder = 'vitb' # or 'vits', 'vitb', 'vitg'
         _type_: _description_
     """
 class FeatureGenerator:
-    def __init__(self,model_name : Model, pretrained = True):
-        self.model = self._get_model(model_name, pretrained)
+    def __init__(self,model_name : Model, pretrained = True,img_size = 224,student = False):
+        self.model = self._get_model(model_name, pretrained,img_size,student=student).to(DEVICE)
         
         
-    def _get_model(self, model_name: Model, pretrained):
+    def _get_model(self, model_name: Model, pretrained,img_size,student):
         match model_name:
             case Model.RES_NET_18:
                 model = resnet18(weights='DEFAULT' if pretrained else None)
@@ -40,9 +44,9 @@ class FeatureGenerator:
             case Model.RES_NET_152:
                 model = resnet152(weights='DEFAULT' if pretrained else None)
             case Model.ENDO_FM:
-                vit = vision_transformer.VisionTransformer()
+                vit = vision_transformer.VisionTransformer(img_size=[img_size])
                 weights_path = "./EndoFM/endo_fm.pth"
-                state_dict = torch.load(weights_path, map_location=torch.device('cpu'))["student"]
+                state_dict = torch.load(weights_path, map_location=torch.device('cpu'))["student" if student else "teacher"]
 
                 new_state_dict = {}
                 for k, v in state_dict.items():
@@ -86,6 +90,7 @@ class FeatureGenerator:
         
         
     def generate(self, image: torch.Tensor) -> torch.Tensor:
+        image = image.to(DEVICE) 
         with torch.no_grad():
             features = self.model(image)
         return features

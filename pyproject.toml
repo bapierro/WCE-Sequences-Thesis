@@ -28,6 +28,13 @@ termcolor = "^2.4.0"
 tqdm = "^4.66.4"
 gradio-imageslider = "^0.0.20"
 hdbscan = "^0.8.37"
+lightning = "^2.4.0"
+apex = "^0.9.10.dev0"
+lightning-bolts = "^0.7.0"
+lightly = "^1.5.12"
+ffmpeg-python = "^0.2.0"
+pywavelets = "^1.7.0"
+plotly = "^5.24.1"
 
 
 [build-system]
