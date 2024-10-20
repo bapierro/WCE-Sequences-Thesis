@@ -1,0 +1,56 @@
+
+# General parameters
+path: "/path/to/your/dataset"
+img_size: 224  # Reduced from 336 to manage computational load
+seed: 23
+
+# Training parameters
+training:
+  epochs: 300
+  batch_size: 32  # Reduced batch size due to higher resolutions
+  num_workers: 4
+  learning_rate: 0.0000625  # Adjusted based on batch size (0.0005 * 32 / 256)
+  weight_decay: 0.05
+  optimizer: "adamw"
+  precision: 16  # Mixed precision training to save memory
+  scheduler:
+    name: "cosine"
+    warmup_epochs: 10
+
+# Momentum schedule for teacher model
+momentum_schedule:
+  base_momentum: 0.996
+  final_momentum: 1.0
+
+# DINO loss parameters
+dino_loss:
+  output_dim: 65536
+  warmup_teacher_temp: 0.04
+  teacher_temp: 0.07
+  warmup_teacher_temp_epochs: 10  # Shorter warm-up due to domain similarity
+  student_temp: 0.1
+  center_momentum: 0.9
+
+# Transform parameters
+transforms:
+  global_crop_size: 224
+  global_crop_scale: [0.5, 1.0]  # Focus on larger global context
+  local_crop_size: 160  # Increased resolution for local crops
+  local_crop_scale: [0.3, 0.5]  # Larger local crops to ensure overlap and context
+  n_local_views: 4  # Reduced number of local views to manage computational cost
+  hf_prob: 0.5
+  vf_prob: 0.5  # Vertical flip is acceptable in medical imaging
+  rr_prob: 0.5  # Random rotation helps with orientation variance
+  cj_prob: 0.8
+  cj_strength: 0.7  
+  cj_bright: 0.4
+  cj_contrast: 0.4
+  cj_sat: 0.2
+  cj_hue: 0.0 # Ich will echt nichts an der hue ändern
+  random_gray_scale: 0.2
+  gaussian_blur: [1.0, 0.1, 0.0] # Blur nur zwischen den global views, local brauchen wir jedes detail
+  sigmas: [0.1, 2.0]
+  solarization_prob: [0.0, 0.0]  # Keine Solarization -> Warum auch?
+  normalize:
+    mean: [0.5929, 0.3667, 0.1843]  
+    std: [0.1932, 0.1411, 0.0940]   

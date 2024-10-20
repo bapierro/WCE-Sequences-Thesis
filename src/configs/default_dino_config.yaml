@@ -1,0 +1,57 @@
+# default_config.yaml
+
+# General parameters
+path: "/path/to/your/dataset"
+img_size: 224
+seed: 23
+
+# Training parameters
+training:
+  epochs: 300
+  batch_size: 64
+  num_workers: 4
+  learning_rate: 0.0005  # 0.0005 * (batch_size / 256)
+  weight_decay: 0.04
+  optimizer: "adamw"
+  precision: 16  # Mixed precision training
+  scheduler:
+    name: "cosine"
+    warmup_epochs: 10
+
+# Momentum schedule for teacher model
+momentum_schedule:
+  base_momentum: 0.996
+  final_momentum: 1.0
+
+# DINO loss parameters
+dino_loss:
+  output_dim: 65536
+  warmup_teacher_temp: 0.04
+  teacher_temp: 0.07
+  warmup_teacher_temp_epochs: 30
+  student_temp: 0.1
+  center_momentum: 0.9
+
+# Transform parameters
+transforms:
+  global_crop_size: 224
+  global_crop_scale: [0.4, 1.0]
+  local_crop_size: 96
+  local_crop_scale: [0.05, 0.4]
+  n_local_views: 6
+  hf_prob: 0.5
+  vf_prob: 0.0  # Vertical flip often set to 0 in natural images
+  rr_prob: 0.0  # Random rotation not commonly used in default DINO
+  cj_prob: 0.8
+  cj_strength: 0.5
+  cj_bright: 0.4
+  cj_contrast: 0.4
+  cj_sat: 0.2
+  cj_hue: 0.1
+  random_gray_scale: 0.2
+  gaussian_blur: [1.0, 0.1, 0.0]  # Applied to global crops only
+  sigmas: [0.1, 2.0]
+  solarization_prob: [0.0, 0.2]  # Applied to second global crop
+  normalize:
+    mean: [0.5929, 0.3667, 0.1843]  # Mean of your dataset
+    std: [0.1932, 0.1411, 0.0940]   # Std of your dataset
