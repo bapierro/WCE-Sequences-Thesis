@@ -1,0 +1,71 @@
+# LR von 0.001 scheint gut zu sein, genau so wie mehrere loocal views
+# Ich will ausprobieren mal gar kein CJ zu verwenden, und eher auf Konturen und Formen zu achten
+# Dazu noch die Output Dimension dees DINO Heads erhöhen genau so wie die batch size
+
+# General parameters
+path: "~/deep_clustering_for_wce/src/dumps/see_ai_processed_training"
+val_path: "~/deep_clustering_for_wce/src/dumps/kid_validation"
+img_size: 224  # Reduced from 336 to manage computational load
+seed: 23
+name: "KeinCJAberGaussHeavy8GPU"
+devices: [3,4,5]  # Update based on available GPUs
+
+# Training parameters
+training:
+  epochs: 300
+  batch_size: 16
+  desired_effective_batch_size: 512
+  num_workers: 8  # Increased for better data loading with multiple GPUs
+  learning_rate: 0.001
+  weight_decay: 0.04
+  optimizer: "adamw"
+  precision: 16
+  scheduler:
+    name: "cosine"
+    warmup_epochs: 10
+  early_stopping:
+    monitor: "val_loss"
+    patience: 10
+    mode: "min"
+
+# Momentum schedule for teacher model
+momentum_schedule:
+  base_momentum: 0.996
+  final_momentum: 1.0
+
+# DINO loss parameters
+dino_loss:
+  output_dim: 4096
+  hidden_dim: 2048
+  input_dim: 768
+  bottleneck_dim: 256
+  warmup_teacher_temp: 0.04
+  teacher_temp: 0.07
+  warmup_teacher_temp_epochs: 10  # Shorter warm-up due to domain similarity
+  student_temp: 0.1
+  center_momentum: 0.9
+
+# Transform parameters
+transforms:
+  global_crop_size: 224
+  global_crop_scale: [0.5, 1.0]
+  local_crop_size: 160  # Increased resolution for local crops
+  local_crop_scale: [0.3, 0.5]
+  n_local_views: 6
+  hf_prob: 0.7
+  vf_prob: 0.7
+  rr_prob: 0.7
+  cj_prob: 0.8
+  cj_strength: 0.0
+  cj_bright: 0.0
+  cj_contrast: 0.0
+  cj_sat: 0.0
+  cj_hue: 0.0
+  random_gray_scale: 0.3
+  gaussian_blur: [1.0, 0.1, 0.3]  # Blur und nicht geblurred sollen gleiche Aktivierungen erreichen bei beiden gloabl views
+                                  # Local views auch manchmal blurren
+  sigmas: [1.0, 3.0] # Mit dem Blurring soll nicht auf feine details sondern auf shapes und konturen geachten werden
+  solarization_prob: 0.0
+  normalize:
+    mean: [0.5929, 0.3667, 0.1843]
+    std: [0.1932, 0.1411, 0.0940]

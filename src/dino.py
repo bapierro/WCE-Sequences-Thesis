@@ -17,10 +17,14 @@ from lightly.utils.scheduler import cosine_schedule
 from lightly.models.utils import deactivate_requires_grad, update_momentum
 from vision_transformer import VisionTransformer
 from seeai_datamodule import SEEAIDataModule
+from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.strategies import DDPStrategy  # Import DDPStrategy
+
 import yaml
 
 parser = argparse.ArgumentParser("DINO Training")
 parser.add_argument("--config", type=str, required=True, help="Path to the YAML config file")
+
 
 
 class DINO(pl.LightningModule):
@@ -57,11 +61,20 @@ class DINO(pl.LightningModule):
 
         self.student_backbone = vitb16_s
         self.student_head = DINOProjectionHead(
-            input_dim, 512, 64, self.config['dino_loss']['output_dim'], freeze_last_layer=1)
+            self.config['dino_loss']['input_dim'],
+            self.config['dino_loss']['hidden_dim'],
+            self.config['dino_loss']['bottleneck_dim'],
+            self.config['dino_loss']['output_dim'],
+            freeze_last_layer=3
+        )
 
         self.teacher_backbone = vitb16_t
         self.teacher_head = DINOProjectionHead(
-            input_dim, 512, 64, self.config['dino_loss']['output_dim'])
+            self.config['dino_loss']['input_dim'],
+            self.config['dino_loss']['hidden_dim'],
+            self.config['dino_loss']['bottleneck_dim'],
+            self.config['dino_loss']['output_dim']
+        )
         deactivate_requires_grad(self.teacher_head)
         deactivate_requires_grad(self.teacher_backbone)
 
@@ -105,7 +118,18 @@ class DINO(pl.LightningModule):
         teacher_out = [self.forward_teacher(view) for view in global_views]
         student_out = [self.forward(view) for view in views]
         loss = self.criterion(teacher_out, student_out, epoch=self.current_epoch)
-        self.log('train_loss', loss)
+        self.log('train_loss', loss, on_epoch=True, prog_bar=True, logger=True,sync_dist=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        with torch.no_grad():
+            views = batch[0]
+            views = [view.to(self.device) for view in views]
+            global_views = views[:2]
+            teacher_out = [self.forward_teacher(view) for view in global_views]
+            student_out = [self.forward(view) for view in views]
+            loss = self.criterion(teacher_out, student_out, epoch=self.current_epoch)
+            self.log('val_loss', loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         return loss
 
     def on_after_backward(self) -> None:
@@ -140,26 +164,56 @@ if __name__ == "__main__":
 
     # Define callbacks
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        monitor='train_loss',
-        save_top_k=1,
+        monitor='val_loss',
+        save_top_k=3,
         mode='min',
-        dirpath='checkpoints/',
-        filename='dino-{epoch:02d}-{train_loss:.2f}'
+        dirpath=f'./checkpoints_{config["name"]}/',
+        filename='dino-{epoch:02d}-{val_loss:.2f}',
+        save_on_train_epoch_end=False,
+        verbose=True
     )
 
-    lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval='step')
+    lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval='epoch')
 
-    # Initialize the Trainer
+    # Initialize logger
+    logger = TensorBoardLogger("tb_logs", name=f"dino_model_{config['name']}")
+
+    early_stopping = pl.callbacks.EarlyStopping(
+        monitor=config['training']['early_stopping']['monitor'],
+        patience=config['training']['early_stopping']['patience'],
+        mode=config['training']['early_stopping']['mode'],
+        verbose=True
+    )
+
+    # Determine the number of GPUs
+    if isinstance(config["devices"], list):
+        num_gpus = len(config["devices"])
+    else:
+        num_gpus = int(config["devices"])
+
+    # Adjust accumulate_grad_batches based on the number of GPUs
+    desired_effective_batch_size = config['training']["desired_effective_batch_size"]
+    actual_batch_size = config['training']['batch_size']
+    accumulate_grad_batches = desired_effective_batch_size // (actual_batch_size * num_gpus)
+    accumulate_grad_batches = max(accumulate_grad_batches, 1)  # Ensure at least 1
+
+    # Initialize the DDPStrategy with find_unused_parameters=False
+    strategy = DDPStrategy(find_unused_parameters=False)
+
+    # Initialize the Trainer with DDPStrategy
     trainer = pl.Trainer(
         max_epochs=config['training']['epochs'],
-        callbacks=[checkpoint_callback, lr_monitor],
-        accelerator='gpu' if torch.cuda.is_available() else 'cpu',
-        devices=1,
+        callbacks=[checkpoint_callback, lr_monitor, early_stopping],
+        accelerator='gpu',
+        devices=config["devices"],
+        strategy=strategy,  # Use the DDPStrategy with find_unused_parameters=False
         precision=16 if config['training'].get('precision', 32) == 16 else 32,
-        amp_backend='native',
         gradient_clip_val=1.0,
-        deterministic=True,
-        check_val_every_n_epoch=5  # Adjust as needed
+        check_val_every_n_epoch=5,
+        logger=logger,
+        enable_progress_bar=True,
+        accumulate_grad_batches=accumulate_grad_batches,
+        log_every_n_steps= 25 if len(config["devices"]) == 8 else 50
     )
 
     # Start training

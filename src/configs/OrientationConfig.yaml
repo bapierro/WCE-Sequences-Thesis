@@ -1,24 +1,29 @@
+# config.yaml
 
 # General parameters
 path: "~/deep_clustering_for_wce/src/dumps/see_ai_processed_training"
+val_path: "~/deep_clustering_for_wce/src/dumps/kid_validation"
 img_size: 224  # Reduced from 336 to manage computational load
 seed: 23
+name: "OrientationAugments"
+devices: [1, 2, 3]  # Update based on available GPUs
 
 # Training parameters
 training:
-  epochs: 200
-  batch_size: 32  # Reduced batch size due to higher resolutions
-  num_workers: 4
-  learning_rate: 0.0002
+  epochs: 300
+  batch_size: 32
+  desired_effective_batch_size: 256
+  num_workers: 8  # Increased for better data loading with multiple GPUs
+  learning_rate: 0.001
   weight_decay: 0.04
   optimizer: "adamw"
-  precision: 16  # Mixed precision training to save memory
+  precision: 16
   scheduler:
     name: "cosine"
     warmup_epochs: 10
   early_stopping:
-    monitor: "train_loss"
-    patience: 10  # Stop if no improvement for 10 epochs
+    monitor: "val_loss"
+    patience: 10
     mode: "min"
 
 # Momentum schedule for teacher model
@@ -44,20 +49,20 @@ transforms:
   global_crop_scale: [0.5, 1.0]
   local_crop_size: 160  # Increased resolution for local crops
   local_crop_scale: [0.3, 0.5]
-  n_local_views: 4  # Reduced number of local views to manage computational cost
+  n_local_views: 4
   hf_prob: 0.5
   vf_prob: 0.5
   rr_prob: 0.5
   cj_prob: 0.8
-  cj_strength: 0.3
+  cj_strength: 0.5  # Increase and monitor the loss
   cj_bright: 0.4
   cj_contrast: 0.4
-  cj_sat: 0.2
-  cj_hue: 0.0 # Ich will echt nichts an der hue ändern
+  cj_sat: 0.0
+  cj_hue: 0.0
   random_gray_scale: 0.2
-  gaussian_blur: [1.0, 0.1, 0.0] # Blur nur zwischen den global views, local brauchen wir jedes detail
+  gaussian_blur: [1.0, 0.1, 0.0]  # Blur only between global views, keep local details
   sigmas: [0.1, 2.0]
-  solarization_prob: 0  # Keine Solarization -> Warum auch?
+  solarization_prob: 0.0
   normalize:
     mean: [0.5929, 0.3667, 0.1843]
     std: [0.1932, 0.1411, 0.0940]

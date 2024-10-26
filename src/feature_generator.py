@@ -9,7 +9,7 @@ from EndoFM import vision_transformer
 from Depth_Anything_V2.depth_anything_v2.dpt import DepthAnythingV2
 import pytorch_lightning as pl  # Import PyTorch Lightning if needed
 
-DEVICE = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+DEVICE = 'cuda:2' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
 
 depth_anything_model_configs = {
     'vits': {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]},
@@ -81,8 +81,12 @@ class FeatureGenerator:
             case Model.CENDO_FM:
                 vit = vision_transformer.VisionTransformer()
                 
-                checkpoint_path = "./checkpoints/dino-epoch=91-train_loss_epoch=6.92.ckpt" 
-                
+                # checkpoint_path = "checkpoints_OrientationAugments/dino-epoch=54-val_loss=5.60.ckpt"
+                #checkpoint_path = "checkpoints_HeavyAugment/Hide/dino-epoch=129-val_loss=5.45.ckpt" #HeavyAugment Light
+                #checkpoint_path = "checkpoints_HeavyAugment/dino-epoch=109-val_loss=5.76.ckpt" # Mehr local views FPS->13
+                #checkpoint_path = "checkpoints_KeinCJAberGaussHeavy8GPU/dino-epoch=179-val_loss=5.83.ckpt" # KeinCJ aber straker gauß FPS-->9
+                #checkpoint_path = "checkpoints_HeavyAugmentLowLR/dino-epoch=74-val_loss=5.20.ckpt"
+                checkpoint_path = "checkpoints_HeavyAugmentLowLR_OVERLAPPING_CROPS/dino-epoch=59-val_loss=4.85.ckpt"
                 if not os.path.isfile(checkpoint_path):
                     raise FileNotFoundError(f"Checkpoint file not found at {checkpoint_path}")
                 
