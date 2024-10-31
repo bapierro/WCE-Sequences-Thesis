@@ -7,6 +7,7 @@ from torchvision.models import (
 from model_name import Model
 from EndoFM import vision_transformer
 from Depth_Anything_V2.depth_anything_v2.dpt import DepthAnythingV2
+
 import pytorch_lightning as pl  # Import PyTorch Lightning if needed
 
 DEVICE = 'cuda:2' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -85,8 +86,13 @@ class FeatureGenerator:
                 #checkpoint_path = "checkpoints_HeavyAugment/Hide/dino-epoch=129-val_loss=5.45.ckpt" #HeavyAugment Light
                 #checkpoint_path = "checkpoints_HeavyAugment/dino-epoch=109-val_loss=5.76.ckpt" # Mehr local views FPS->13
                 #checkpoint_path = "checkpoints_KeinCJAberGaussHeavy8GPU/dino-epoch=179-val_loss=5.83.ckpt" # KeinCJ aber straker gauß FPS-->9
-                #checkpoint_path = "checkpoints_HeavyAugmentLowLR/dino-epoch=74-val_loss=5.20.ckpt"
-                checkpoint_path = "checkpoints_HeavyAugmentLowLR_OVERLAPPING_CROPS/dino-epoch=59-val_loss=4.85.ckpt"
+                #checkpoint_path = "checkpoints_HeavyAugmentLowLR/dino-epoch=74-val_loss=5.20.ckpt" 
+                checkpoint_path = "checkpoints_HeavyAugmentLowLR_OVERLAPPING_CROPS_4Views/dino-epoch=59-val_loss=4.85.ckpt"
+                #checkpoint_path = "checkpoints_HeavyAugmentLowLR_OVERLAPPING_CROPS_6Views/dino-epoch=69-val_loss=4.92.ckpt"
+                #checkpoint_path = "checkpoints_HeavyAugment_NoCJ/dino-epoch=79-val_loss=4.08.ckpt"# KeinCJ
+                #checkpoint_path = "checkpoints_HeavyAugmentBigLocalVies/dino-epoch=89-val_loss=4.71.ckpt"# biggerLocal Views
+                # checkpoint_path = "checkpoints_LightAugmentsDinoEsque/dino-epoch=44-val_loss=7.98.ckpt"# Basic dino transforms
+                #checkpoint_path = "checkpoints_HeavyAugment_OVERLAPPING_CROPS_4_BigDinoHEAD/dino-epoch=79-val_loss=7.52.ckpt"
                 if not os.path.isfile(checkpoint_path):
                     raise FileNotFoundError(f"Checkpoint file not found at {checkpoint_path}")
                 
@@ -118,6 +124,7 @@ class FeatureGenerator:
         ):
             model = nn.Sequential(*list(model.children())[:-1])
         
+        model = nn.DataParallel(model,device_ids=[2])
         return model
             
     def _init_weights(self, m):

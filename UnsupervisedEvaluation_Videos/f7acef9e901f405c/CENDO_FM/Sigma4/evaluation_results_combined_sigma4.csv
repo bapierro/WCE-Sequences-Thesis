@@ -1,0 +1,3 @@
+method,sigma,minCl,minSpl,temporal_purity,silhouette_score,davies_bouldin_index,calinski_harabasz_index,intercluster_distance,intracluster_distance,intra_cluster_variance,transition_count,average_segment_length
+CENDO_FM_HDBSCAN,4,300,1,0.8155306593688532,-0.029721983,1.0388501206758287,4668.493562418656,0.82888645,9.944425,10.271437,3,6263.25
+CENDO_FM_Random_Segmentation,4,300,1,1.0,0.41905844,1.1950104634381251,6897.252098151102,0.073586285,12.125729,19.455463,1,12526.5

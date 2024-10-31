@@ -5,7 +5,7 @@ path: "~/deep_clustering_for_wce/src/dumps/see_ai_processed_training"
 val_path: "~/deep_clustering_for_wce/src/dumps/kid_validation"
 img_size: 224  # Reduced from 336 to manage computational load
 seed: 23
-name: "HeavyAugment"
+name: "MoreViewsHeavyAugment"
 devices: [1, 2, 3, 4]  # Update based on available GPUs
 
 # Training parameters
@@ -54,7 +54,7 @@ transforms:
   vf_prob: 0.7
   rr_prob: 0.7
   cj_prob: 0.8
-  cj_strength: 0.8
+  cj_strength: 0.5
   cj_bright: 0.4
   cj_contrast: 0.4
   cj_sat: 0.0

@@ -41,6 +41,7 @@ def evaluate_clustering(true_labels, predicted_labels):
     Returns:
     - A dictionary containing accuracy, NMI, and ARI with and without anomalies.
     """
+    
     # Calculate accuracy with anomalies
     label_mapping = np.zeros_like(predicted_labels)
     unique_true = np.unique(true_labels)
@@ -267,44 +268,6 @@ def visualize_full_fps(minCl, minSpl, sigma, labels, transformed_data, raw_featu
     )
 
 
-# def copy_images_to_clusters(minCl, minSpl, sigma, labels, output_dir, dataset_samples, model_name, name, fps):
-#     """
-#     Copy images to directories based on cluster labels.
-#
-#     Parameters:
-#     - minCl: Minimum cluster size used in HDBSCAN.
-#     - minSpl: Minimum samples used in HDBSCAN.
-#     - sigma: Sigma value used in Gaussian smoothing.
-#     - labels: Cluster labels obtained from HDBSCAN.
-#     - output_dir: Base output directory.
-#     - dataset_samples: List of dataset samples (image paths and labels).
-#     - model_name: Name of the model used for feature extraction.
-#     - name: Name of the dataset or experiment.
-#     - fps: Frames per second value.
-#     """
-#     if not any([minCl, minSpl, sigma]):
-#         return
-#
-#     out_dir = os.path.join(output_dir, name, f"{fps}FPS", f"{model_name}_sigma{sigma}_{minCl}_{minSpl}")
-#     # Create the output directory if it doesn't exist
-#     os.makedirs(out_dir, exist_ok=True)
-#
-#     # Iterate through each image and copy it to the corresponding cluster directory
-#     for i, label in enumerate(labels):
-#         cluster_dir = os.path.join(out_dir, f"cluster_{label}" if label != -1 else "noise")
-#
-#         if not os.path.exists(cluster_dir):
-#             os.makedirs(cluster_dir)
-#
-#         # Get the original image path
-#         image_path, _ = dataset_samples[i]
-#
-#         # Copy the image to the corresponding cluster directory
-#         try:
-#             shutil.copy(image_path, cluster_dir)
-#         except Exception as e:
-#             print(f"Error copying {image_path} to {cluster_dir}: {e}")
-
 def process_combination(minCl, minSpl, params):
     """
     Process a single combination of minCl and minSpl.
@@ -397,211 +360,193 @@ def process_combination(minCl, minSpl, params):
 
     return metrics  # Return the metrics for this combination
 
+
 class WCECluster:
     def __init__(
-        self,
-        dataset_path: str,
-        minCl: list[int] = [30],
-        minSpl: list[int] = [1],
-        batch_size: int = 32,
-        img_size: int = 224,
-        backbone=Model.ENDO_FM,
-        evaluate: bool = False,
-        smooth=True,
-        save_clusters: bool = False,
-        output_dir="./dumps/clustered_images",
-        plot_time_series=False,
-        student=True,
-        draw_plots=True,
-        sigmas: list[float] = [6],
-        fps=None,
-        save_full_fps=False,
-        recompute = False
+            self,
+            dataset_path: str,
+            minCl: list[int] = [30],
+            minSpl: list[int] = [1],
+            batch_size: int = 32,
+            img_size: int = 224,
+            backbones=None,  # Accept a list of models
+            evaluate: bool = False,
+            smooth=True,
+            student=True,
+            draw_plots=True,
+            sigmas: list[float] = [6],
+            fps=None,
+            recompute=False
     ):
+        """
+        Initialize the WCECluster class.
+
+        Parameters:
+        - dataset_path: Path to the dataset directory.
+        - minCl: List of minimum cluster sizes for HDBSCAN.
+        - minSpl: List of minimum samples for HDBSCAN.
+        - batch_size: Batch size for DataLoader.
+        - img_size: Image size for transformations.
+        - backbones: List of backbone models for feature extraction.
+        - evaluate: Whether to compute evaluation metrics.
+        - smooth: Whether to apply Gaussian smoothing.
+        - student: Whether to use student model features.
+        - draw_plots: Whether to generate and save plots.
+        - sigmas: List of sigma values for Gaussian smoothing.
+        - fps: Frames per second value.
+        - recompute: Whether to recompute features if they exist.
+        """
         if fps is None:
             raise RuntimeError("Please specify FPS")
+        if backbones is None or not isinstance(backbones, list):
+            raise ValueError("Please provide a list of backbone models.")
+
         self.recompute = recompute
         self.sigmas = sigmas
         self.fps = fps
-        self.save_full_fps = save_full_fps  # Whether to save and visualize the full FPS version
-        self.plot_time_series = plot_time_series
         self.minCl_values = minCl
         self.minSpl_values = minSpl
         self.evaluate = evaluate
         self.smooth = smooth
-        self.save_clusters = save_clusters
+        self.backbones = backbones  # Now a list of models
+        self.student = student
+        self.batch_size = batch_size
+        self.img_size = img_size
         self.name = os.path.basename(dataset_path.rstrip('/'))
         self.draw_plots = draw_plots
-        self.model_name = backbone.name
-        self.backbone = FeatureGenerator(model_name=backbone, student=student)  # Adjust accordingly
 
-        if backbone in (Model.ENDO_FM,Model.CENDO_FM):
-            normalize = v2.Normalize([0.5929, 0.3667, 0.1843], [0.1932, 0.1411, 0.0940])
-        elif backbone in (Model.DEPTH_ANY_SMALL, Model.DEPTH_ANY_LARGE, Model.DEPTH_ANY_BASE):
-            normalize = v2.Normalize([0.485, 0.456, 0.406], [0.229, 0.224,
-                                                             0.225])  # Example normalization for a standard ImageNet-trained model
-        elif backbone in (Model.RES_NET_50, Model.RES_NET_101):
-            normalize = v2.Normalize([0.485, 0.456, 0.406],
-                                     [0.229, 0.224, 0.225])  # Typical normalization used for ResNet
-        else:
-            raise ValueError(f"Unsupported backbone model: {backbone}")
+        # Initialize DataLoader
+        self.dataset = datasets.ImageFolder(dataset_path)
+        self.data_loader = DataLoader(self.dataset, batch_size=batch_size, shuffle=False, num_workers=8)
 
-        preprocess = v2.Compose([
-            v2.ToImage(),
-            v2.ToDtype(torch.float32, scale=True),
-            normalize,  # Apply the normalization specific to the backbone
-            v2.Resize(img_size)
-        ])
-        self.dataset = datasets.ImageFolder(dataset_path, transform=preprocess)
-        self.output_dir = output_dir
-
+        # Set up Seaborn aesthetics
         sns.set_context('poster')
         sns.set_style('white')
         sns.set_color_codes()
 
-        self.data_loader = DataLoader(self.dataset, batch_size=batch_size)
-
-    def estimate_noise_std(self, features):
-        # Compute differences between adjacent features
-        diffs = np.diff(features, axis=0)
-        # Flatten the differences if features are multi-dimensional
-        diffs_flat = diffs.flatten()
-        # Use Median Absolute Deviation (MAD) for robustness
-        mad = np.median(np.abs(diffs_flat - np.median(diffs_flat)))
-        # Convert MAD to standard deviation (assuming Gaussian noise)
-        noise_std = mad / 0.6745
-        return noise_std
-
-    def _extract_features(self):
+    def _get_preprocess(self, backbone):
         """
-        Extract features from the dataset or load them if they already exist.
+        Get the preprocessing transformation specific to the backbone model.
+        """
+        if backbone in (Model.ENDO_FM, Model.CENDO_FM):
+            normalize = v2.Normalize([0.5929, 0.3667, 0.1843], [0.1932, 0.1411, 0.0940])
+        elif backbone in (Model.DEPTH_ANY_SMALL, Model.DEPTH_ANY_LARGE, Model.DEPTH_ANY_BASE):
+            normalize = v2.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        elif backbone in (Model.RES_NET_50, Model.RES_NET_101, Model.RES_NET_18, Model.RES_NET_34, Model.RES_NET_152):
+            normalize = v2.Normalize([0.485, 0.456, 0.406],
+                                     [0.229, 0.224, 0.225])
+        else:
+            raise ValueError(f"Unsupported backbone model: {backbone}")
+
+        # Define data transformations
+        preprocess = v2.Compose([
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            normalize,  # Apply the normalization specific to the backbone
+            v2.Resize(self.img_size)
+        ])
+        return preprocess
+
+    def _extract_features(self, backbone):
+        """
+        Extract features using the specified backbone model.
+
+        Parameters:
+        - backbone: The backbone model to use for feature extraction.
+
+        Returns:
+        - features: Extracted features as a NumPy array.
         """
         feature_dir = os.path.join('./dumps/Features', self.name)
         os.makedirs(feature_dir, exist_ok=True)
-        feature_file = os.path.join(feature_dir, f'{self.model_name}_{self.fps}FPS_features.npy')
-        label_file = os.path.join(feature_dir, f'{self.model_name}_{self.fps}FPS_labels.npy')
+        feature_file = os.path.join(feature_dir, f'{backbone.name}_{self.fps}FPS_features.npy')
 
-        if os.path.exists(feature_file) and os.path.exists(label_file) and not self.recompute:
-            print(f"Loading features from {feature_file}")
-            self.features = np.load(feature_file)
-            self.control_labels = np.load(label_file)
+        if os.path.exists(feature_file) and not self.recompute:
+            print(f"Loading features from {feature_file} for model {backbone.name}")
+            features = np.load(feature_file)
         else:
+            # Initialize the feature generator
+            feature_generator = FeatureGenerator(model_name=backbone, student=self.student).to(DEVICE)
+            feature_generator.model.eval()  # Ensure the model is in evaluation mode
+
+            # Update the DataLoader with the appropriate transforms
+            preprocess = self._get_preprocess(backbone)
+            self.dataset.transform = preprocess
+            data_loader = DataLoader(self.dataset, batch_size=self.batch_size, shuffle=False, num_workers=8)
+
             extracted_features = []
-            control_labels = []
-            print("Beginning feature extraction...")
+            print(f"Beginning feature extraction with {backbone.name}...")
 
-            # First pass: Collect all features and labels
-            for img_batch, label_batch in tqdm(self.data_loader, desc="Passing images through backbone", unit="batch"):
+            # Collect all features
+            for img_batch, _ in tqdm(data_loader, desc=f"Extracting features with {backbone.name}", unit="batch"):
                 # Generate features using the backbone model
-                features = self.backbone.generate(img_batch)
-                features = features.view(features.size(0), -1)
-                features_np = features.cpu().numpy()
+                features_batch = feature_generator.generate(img_batch)
+                features_batch = features_batch.view(features_batch.size(0), -1)
+                features_np = features_batch.cpu().numpy()
 
-                # Append features and labels to the list without smoothing
+                # Append features to the list
                 extracted_features.append(features_np)
-                control_labels.append(label_batch.cpu().numpy())
 
-            # Stack the transformed data and control labels into final arrays
-            self.features = np.vstack(extracted_features)
-            self.control_labels = np.hstack(control_labels)
+            # Stack the transformed data into final array
+            features = np.vstack(extracted_features)
 
-            # Save features and labels for future use
-            np.save(feature_file, self.features)
-            np.save(label_file, self.control_labels)
-            print(f"Features saved to {feature_file}")
+            # Save features for future use
+            np.save(feature_file, features)
+            print(f"Features saved to {feature_file} for model {backbone.name}")
 
-    def _visualize_original_distribution(self, sigma):
+            # Clean up to free memory
+            del feature_generator
+            torch.cuda.empty_cache()
+
+        return features
+
+    def _process_sigma(self, sigma, features, backbone_name):
         """
-        Visualize the original distribution with raw and smoothed features using original labels.
-        This is saved only once per model and FPS.
+        Process the data for a specific sigma value, including smoothing, clustering, evaluation, and visualization.
+
+        Parameters:
+        - sigma: Sigma value for Gaussian smoothing.
+        - features: Feature array to process.
+        - backbone_name: Name of the backbone model used.
         """
-        fps_folder = f"{self.fps}FPS"
-        output_dir_base = os.path.join("./dumps/Plots", self.name, fps_folder, self.model_name, "FullFPSClusters")
-        os.makedirs(output_dir_base, exist_ok=True)
-
-        # Check if the plots already exist
-        output_path_raw = os.path.join(output_dir_base, f"tsne_original_labels_raw_{self.name}.svg")
-        output_path_smoothed = os.path.join(output_dir_base, f"tsne_original_labels_smoothed_{self.name}_sigma{sigma}.svg")
-        if os.path.exists(output_path_raw) and os.path.exists(output_path_smoothed) and not self.recompute:
-            print(f"Original distribution plots already exist: {output_path_raw}")
-            return
-
-        print(f"Visualizing original distribution with sigma={sigma}")
-
-        # Time steps
-        time_steps = np.arange(len(self.control_labels))
-
-        # Visualize raw features with original labels
-        if not os.path.exists(output_path_raw):
-            visualize_data(
-                data=self.raw_features,
-                labels=self.control_labels,
-                time_steps=time_steps,
-                title=f"{self.name}",
-                output_dir=output_dir_base,
-                filename_suffix=f"original_labels_raw_{self.name}",
-                control_labels=self.control_labels,
-                classes=self.dataset.classes
-            )
-
-        # Visualize smoothed features with original labels
-        visualize_data(
-            data=self.transformed_data,
-            labels=self.control_labels,
-            time_steps=time_steps,
-            title=f"{self.name} Smoothed (sigma={sigma})",
-            output_dir=output_dir_base,
-            filename_suffix=f"original_labels_smoothed_{self.name}_sigma{sigma}",
-            control_labels=self.control_labels,
-            classes=self.dataset.classes
-        )
-
-    def _process_sigma(self, sigma):
-        print(f"Processing sigma: {sigma}")
+        print(f"Processing sigma: {sigma} for model: {backbone_name}")
 
         # Apply Gaussian filter to features
-        radius = int(3 * sigma)
-        transformed_data = gaussian_filter(self.features, sigma=sigma, radius=radius)
+        if self.smooth:
+            transformed_data = gaussian_filter(features, sigma=sigma)
+        else:
+            transformed_data = features.copy()
         self.transformed_data = transformed_data  # Assign transformed data
 
-        # Visualize the original distribution with original labels (only once per sigma)
-        if self.draw_plots:
-            self._visualize_original_distribution(sigma)
+        # Apply PCA for dimensionality reduction if needed
+        # Uncomment the following lines if you want to apply PCA
+        # from sklearn.decomposition import PCA
+        # pca = PCA(n_components=100)
+        # transformed_data = pca.fit_transform(transformed_data)
+        # print(f"PCA reduced data shape to {transformed_data.shape}")
 
         # Prepare combinations of minCl and minSpl
         combinations = list(product(self.minCl_values, self.minSpl_values))
 
-        # Store transformed_data and control_labels in a memmap to share between processes
+        # Store transformed_data in a memmap to share between processes
         temp_folder = tempfile.mkdtemp()
         data_filename_memmap = os.path.join(temp_folder, 'data_memmap')
-        labels_filename_memmap = os.path.join(temp_folder, 'labels_memmap')
-
         joblib.dump(transformed_data, data_filename_memmap)
         memmap_data = joblib.load(data_filename_memmap, mmap_mode='r')
-
-        joblib.dump(self.control_labels, labels_filename_memmap)
-        memmap_labels = joblib.load(labels_filename_memmap, mmap_mode='r')
-
-        # Prepare dataset samples for image copying
-        dataset_samples = self.dataset.samples
 
         # Pass necessary parameters explicitly to avoid referencing self
         process_combination_params = {
             'sigma': sigma,
             'memmap_data': memmap_data,
-            'memmap_labels': memmap_labels,
             'name': self.name,
-            'model_name': self.model_name,
+            'model_name': backbone_name,
             'fps': self.fps,
             'evaluate': self.evaluate,
-            'save_full_fps': self.save_full_fps,
             'draw_plots': self.draw_plots,
-            'save_clusters': self.save_clusters,
             'output_dir': self.output_dir,
-            'classes': self.dataset.classes,
             'transformed_data': transformed_data,  # For visualization
-            'raw_features': self.raw_features,     # For visualization
-            'dataset_samples': dataset_samples     # For copying images
+            'raw_features': features,  # For potential future use
+            'dataset_samples': self.dataset.samples  # List of (image_path, class_idx)
         }
 
         # Parallelize over combinations
@@ -610,33 +555,65 @@ class WCECluster:
             for minCl, minSpl in combinations
         )
 
-        # Filter out None values and collect evaluation results
-        evaluation_results = [metrics for metrics in results if metrics is not None]
+        # Collect evaluation results
+        evaluation_results = [metrics for metrics in results if metrics]
 
         # After all computations, create a DataFrame and save or display it
         if self.evaluate and evaluation_results:
-            results_df = pd.DataFrame(evaluation_results)
-            print("\nEvaluation Results:")
-            print(results_df)
+            # Separate HDBSCAN and Random_Segmentation metrics
+            hdbscan_metrics = []
+            random_metrics = []
+            for metrics in evaluation_results:
+                if 'HDBSCAN' in metrics:
+                    hdbscan_metrics.append(metrics['HDBSCAN'])
+                if 'Random_Segmentation' in metrics:
+                    random_metrics.append(metrics['Random_Segmentation'])
 
-            # Save the results to a CSV file
-            eval_dir = os.path.join("./dumps/Evaluation", self.name, self.model_name, f"Sigma{sigma}")
+            results_hdbscan_df = pd.DataFrame(hdbscan_metrics)
+            results_random_df = pd.DataFrame(random_metrics)
+            print("\nEvaluation Results for HDBSCAN:")
+            print(results_hdbscan_df)
+            print("\nEvaluation Results for Random Segmentation:")
+            print(results_random_df)
+
+            # Merge the two DataFrames for comparison
+            results_hdbscan_df['method'] = 'HDBSCAN'
+            results_random_df['method'] = 'Random_Segmentation'
+            combined_results_df = pd.concat([results_hdbscan_df, results_random_df], ignore_index=True)
+
+            # Save the combined results to a CSV file
+            eval_dir = os.path.join("./dumps/Evaluation", self.name, backbone_name, f"Sigma{sigma}")
             os.makedirs(eval_dir, exist_ok=True)
-            output_path = os.path.join(eval_dir, f"evaluation_results_{self.name}_sigma{sigma}.csv")
-            results_df.to_csv(output_path, index=False)
-            print(f"Evaluation results saved to {output_path}")
+            output_path = os.path.join(eval_dir, f"evaluation_results_combined_sigma{sigma}.csv")
+            combined_results_df.to_csv(output_path, index=False)
+            print(f"Combined evaluation results saved to {output_path}")
+
+        # Clean up temporary files
+        try:
+            shutil.rmtree(temp_folder)
+        except Exception as e:
+            print(f"Could not delete temp folder {temp_folder}: {e}")
 
     def apply(self):
-        self._extract_features()
+        """
+        Execute the clustering pipeline: feature extraction, clustering, evaluation, and visualization for each backbone.
+        """
+        for backbone in self.backbones:
+            print(f"\nProcessing with model: {backbone.name}")
+            self.model_name = backbone.name  # Update model_name for output paths
 
-        # Store raw features and original labels before any modifications
-        self.raw_features = self.features.copy()
+            # Extract features for the current model
+            features = self._extract_features(backbone)
 
-        # Unload the model to free GPU memory
-        del self.backbone.model
-        torch.cuda.empty_cache()
+            # Store raw features before any modifications
+            self.raw_features = features.copy()
 
-        # Parallelize over sigmas
-        Parallel(n_jobs=4)(
-            delayed(self._process_sigma)(sigma) for sigma in self.sigmas
-        )
+            # Update output directory for the current model
+            fps_folder = f"{self.fps}FPS"
+            self.output_dir = os.path.join("./dumps/Plots", self.name, fps_folder, self.model_name, "FullFPSClusters")
+            os.makedirs(self.output_dir, exist_ok=True)
+
+            # Parallelize over sigmas
+            Parallel(n_jobs=4)(
+                delayed(self._process_sigma)(sigma, features, self.model_name) for sigma in self.sigmas
+            )

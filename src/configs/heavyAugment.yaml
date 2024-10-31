@@ -48,7 +48,7 @@ transforms:
   global_crop_size: 224
   global_crop_scale: [0.5, 1.0]
   local_crop_size: 160  # Increased resolution for local crops
-  local_crop_scale: [0.3, 0.7]
+  local_crop_scale: [0.3, 0.5]
   n_local_views: 4
   hf_prob: 0.7
   vf_prob: 0.7

@@ -1,0 +1,3 @@
+method,sigma,minCl,minSpl,temporal_purity,silhouette_score,davies_bouldin_index,calinski_harabasz_index,intercluster_distance,intracluster_distance,intra_cluster_variance,transition_count,average_segment_length
+ENDO_FM_HDBSCAN,4,300,1,1.0,-0.010623528,3.883564805519508,428.95243391254314,0.8542604,7.5827775,9.27997,39,430.025
+ENDO_FM_Random_Segmentation,4,300,1,1.0,-0.09022877,3.4332372348830478,326.3367244559094,0.26066098,6.7504234,8.312646,23,716.7083333333334

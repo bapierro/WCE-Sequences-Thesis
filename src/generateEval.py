@@ -75,9 +75,19 @@ if __name__ == "__main__":
         #            sigmas=[0, 1, 2, 3, 4, 5]).apply()
 
 
-        WCECluster(folder, minCl=minCLs, batch_size=64, smooth=True, fps=30,
-                   backbone=Model.CENDO_FM, save_full_fps=True, evaluate=True, draw_plots=False,
-                   sigmas=[0, 1, 2, 3, 4, 5],recompute=False).apply()
+        # WCECluster(folder, minCl=minCLs, batch_size=64, smooth=True, fps=-17,
+        #            backbone=Model.CENDO_FM, save_full_fps=True, evaluate=True, draw_plots=False,
+        #            sigmas=[0, 1, 2, 3, 4, 5]).apply()
+        
+
+        
+        WCECluster(folder, minCl=minCLs, batch_size=64, smooth=True, fps=-17,
+                   backbone=Model.RES_NET_18, save_full_fps=True, evaluate=True, draw_plots=False,
+                   sigmas=[0, 1, 2, 3, 4, 5]).apply()
+        #
+        # WCECluster(folder, minCl=minCLs, batch_size=64, smooth=True, fps=-17,
+        #            backbone=Model.DEPTH_ANY_BASE, save_full_fps=True, evaluate=True, draw_plots=False,
+        #            sigmas=[0, 1, 2, 3, 4, 5]).apply()
 
 
 

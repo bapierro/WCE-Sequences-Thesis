@@ -1,0 +1,2 @@
+method,sigma,minCl,minSpl,temporal_purity,silhouette_score,intercluster_distance,intracluster_distance
+HDBSCAN,4,300,1,0.6818180572026349,-0.10803843,0.6094031,6.8643246
