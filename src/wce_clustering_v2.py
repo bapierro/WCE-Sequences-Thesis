@@ -432,7 +432,8 @@ def process_combination(minCl, minSpl, params):
     hdbscan_clusterer = hdbscan.HDBSCAN(
         min_cluster_size=minCl,
         min_samples=minSpl,
-        memory=Memory(location="./dumps/cache", verbose=0)
+        memory=Memory(location="./dumps/cache", verbose=0),
+        core_dist_n_jobs=-1
     )
     hdbscan_clusterer.fit(data)
     labels = hdbscan_clusterer.labels_
@@ -468,22 +469,40 @@ def process_combination(minCl, minSpl, params):
         average_segment_length = compute_average_segment_length(labels)
         # dunn_index = compute_dunn_index(data, labels)  # Uncomment if Dunn Index is implemented
 
+        # metrics_hdbscan = {
+        #     'method': 'HDBSCAN',
+        #     'sigma': sigma,
+        #     'minCl': minCl,
+        #     'minSpl': minSpl,
+        #     'Temporal Purity': temporal_purity,
+        #     'silhouette_score': silhouette_avg,
+        #     'Davies-Bouldin Index': db_index,
+        #     'Calinski–Harabasz Index': ch_index,
+        #     'Intercluster Distance': inter_dist,
+        #     'Intracluster Distance': intr_dist,
+        #     'Intracluster Variance': intra_var,
+        #     'Number of Transitions': transition_count,
+        #     'Average Segment Length': average_segment_length
+        #     # 'dunn_index': dunn_index,  # Uncomment if Dunn Index is implemented
+        # }
         metrics_hdbscan = {
             'method': 'HDBSCAN',
             'sigma': sigma,
             'minCl': minCl,
             'minSpl': minSpl,
-            'temporal_purity': temporal_purity,
-            'silhouette_score': silhouette_avg,
-            'davies_bouldin_index': db_index,
-            'calinski_harabasz_index': ch_index,
-            'intercluster_distance': inter_dist,
-            'intracluster_distance': intr_dist,
-            'intra_cluster_variance': intra_var,
-            'transition_count': transition_count,
-            'average_segment_length': average_segment_length
-            # 'dunn_index': dunn_index,  # Uncomment if Dunn Index is implemented
-        }
+            'Temporal Purity': temporal_purity,
+            'Davies-Bouldin Index': db_index,
+            'Calinski–Harabasz Index': ch_index,
+            'Intercluster Distance': inter_dist,
+            'Intracluster Distance': intr_dist,
+            'Intracluster Variance': intra_var,
+            'Number of Transitions': transition_count,
+            'Average Segment Length': average_segment_length,
+            'model_name': model_name,
+            'dataset_name': name,
+            }
+        
+        
 
         # Perform random segmentation
         random_labels = perform_random_segmentation(data.shape[0], num_clusters, random_state=42)
@@ -499,22 +518,24 @@ def process_combination(minCl, minSpl, params):
         average_segment_length_rand = compute_average_segment_length(random_labels)
         # dunn_index_rand = compute_dunn_index(data, random_labels)  # Uncomment if Dunn Index is implemented
 
+
+        # Use the same keys for Random Segmentation metrics
         metrics_random = {
-            'method': 'Random_Segmentation',
+            'method': 'Random Segmentation',
             'sigma': sigma,
             'minCl': minCl,
             'minSpl': minSpl,
-            'temporal_purity': temporal_purity_rand,
-            'silhouette_score': silhouette_avg_rand,
-            'davies_bouldin_index': db_index_rand,
-            'calinski_harabasz_index': ch_index_rand,
-            'intercluster_distance': inter_dist_rand,
-            'intracluster_distance': intra_dist_rand,
-            'intra_cluster_variance': intra_var_rand,
-            'transition_count': transition_count_rand,
-            'average_segment_length': average_segment_length_rand
-            # 'dunn_index': dunn_index_rand,  # Uncomment if Dunn Index is implemented
-        }
+            'Temporal Purity': temporal_purity_rand,
+            'Davies-Bouldin Index': db_index_rand,
+            'Calinski–Harabasz Index': ch_index_rand,
+            'Intercluster Distance': inter_dist_rand,
+            'Intracluster Distance': intra_dist_rand,
+            'Intracluster Variance': intra_var_rand,
+            'Number of Transitions': transition_count_rand,
+            'Average Segment Length': average_segment_length_rand,
+            'model_name': model_name,
+            'dataset_name': name,
+            }
 
         # Extract representative points for Random Segmentation
         # Since random segmentation has contiguous segments, selecting the first frame as representative
@@ -553,6 +574,22 @@ def process_combination(minCl, minSpl, params):
             model_name=model_name,
             output_dir=output_dir
         )
+        
+    # After computing metrics_hdbscan and metrics_random
+    metrics_hdbscan.update({
+        'model_name': model_name,
+        'sigma': sigma,
+        'minCl': minCl,
+        'minSpl': minSpl,
+        'dataset_name': name,
+    })
+    metrics_random.update({
+        'model_name': model_name,
+        'sigma': sigma,
+        'minCl': minCl,
+        'minSpl': minSpl,
+        'dataset_name': name,
+    })
 
     return metrics  # Return the metrics for this combination
 
@@ -570,13 +607,14 @@ class WCECluster:
         batch_size: int = 32,
         img_size: int = 224,
         backbones=None,  # Accept a list of models
-        evaluate: bool = False,
+        evaluate: bool = True,
         smooth=True,
         student=True,
         draw_plots=True,
         sigmas: list[float] = [6],
         fps=None,
-        recompute=False
+        recompute=False,
+        output_root: str = "./dumps"  # Root directory for outputs
     ):
         """
         Initialize the WCECluster class.
@@ -600,6 +638,9 @@ class WCECluster:
             raise RuntimeError("Please specify FPS")
         if backbones is None or not isinstance(backbones, list):
             raise ValueError("Please provide a list of backbone models.")
+        
+        self.all_metrics = []  # List to store all evaluation metrics
+        self.output_root = output_root  
         
         self.recompute = recompute
         self.sigmas = sigmas
@@ -718,13 +759,6 @@ class WCECluster:
             transformed_data = features.copy()
         self.transformed_data = transformed_data  # Assign transformed data
 
-        # Apply PCA for dimensionality reduction if needed
-        # Uncomment the following lines if you want to apply PCA
-        # from sklearn.decomposition import PCA
-        # pca = PCA(n_components=100)
-        # transformed_data = pca.fit_transform(transformed_data)
-        # print(f"PCA reduced data shape to {transformed_data.shape}")
-
         # Prepare combinations of minCl and minSpl
         combinations = list(product(self.minCl_values, self.minSpl_values))
 
@@ -744,9 +778,9 @@ class WCECluster:
             'evaluate': self.evaluate,
             'draw_plots': self.draw_plots,
             'output_dir': self.output_dir,
-            'transformed_data': transformed_data,  # For visualization
-            'raw_features': features,              # For potential future use
-            'dataset_samples': self.dataset.samples  # List of (image_path, class_idx)
+            'transformed_data': transformed_data,
+            'raw_features': features,
+            'dataset_samples': self.dataset.samples
         }
 
         # Parallelize over combinations
@@ -777,16 +811,39 @@ class WCECluster:
             print(results_random_df)
 
             # Merge the two DataFrames for comparison
-            results_hdbscan_df['method'] = 'HDBSCAN'
-            results_random_df['method'] = 'Random_Segmentation'
+            results_hdbscan_df['method'] = f'{backbone_name}_HDBSCAN'
+            results_random_df['method'] = f'{backbone_name}_Random_Segmentation'
             combined_results_df = pd.concat([results_hdbscan_df, results_random_df], ignore_index=True)
 
             # Save the combined results to a CSV file
-            eval_dir = os.path.join("./dumps/Evaluation", self.name, backbone_name, f"Sigma{sigma}")
+            eval_dir = os.path.join(self.output_root, "Evaluation_Unsupervised", self.name, backbone_name, f"Sigma{sigma}")
             os.makedirs(eval_dir, exist_ok=True)
             output_path = os.path.join(eval_dir, f"evaluation_results_combined_sigma{sigma}.csv")
             combined_results_df.to_csv(output_path, index=False)
             print(f"Combined evaluation results saved to {output_path}")
+
+        if self.evaluate and evaluation_results:
+            # Flatten evaluation_results
+            flattened_metrics = []
+            for metrics in evaluation_results:
+                for method_name, method_metrics in metrics.items():
+                    flattened_metrics.append(method_metrics)
+
+            # Create DataFrame from flattened_metrics
+            combined_results_df = pd.DataFrame(flattened_metrics)
+            print("\nCombined Evaluation Results:")
+            print(combined_results_df)
+
+            # Save the combined results to a CSV file
+            eval_dir = os.path.join(
+                self.output_root, "Evaluation_Unsupervised", self.name, backbone_name, f"Sigma{sigma}"
+            )
+            os.makedirs(eval_dir, exist_ok=True)
+            output_path = os.path.join(eval_dir, f"evaluation_results_combined_sigma{sigma}.csv")
+            combined_results_df.to_csv(output_path, index=False)
+            print(f"Combined evaluation results saved to {output_path}")
+        else:
+            flattened_metrics = []
 
         # Clean up temporary files
         try:
@@ -794,10 +851,10 @@ class WCECluster:
         except Exception as e:
             print(f"Could not delete temp folder {temp_folder}: {e}")
 
+        return flattened_metrics
+    
+
     def apply(self):
-        """
-        Execute the clustering pipeline: feature extraction, clustering, evaluation, and visualization for each backbone.
-        """
         for backbone in self.backbones:
             print(f"\nProcessing with model: {backbone.name}")
             self.model_name = backbone.name  # Update model_name for output paths
@@ -810,10 +867,17 @@ class WCECluster:
 
             # Update output directory for the current model
             fps_folder = f"{self.fps}FPS"
-            self.output_dir = os.path.join("./dumps/Plots", self.name, fps_folder, self.model_name, "FullFPSClusters")
+            self.output_dir = os.path.join(
+                self.output_root, "Plots", self.name, fps_folder, self.model_name, "FullFPSClusters"
+            )
             os.makedirs(self.output_dir, exist_ok=True)
 
-            # Parallelize over sigmas
-            Parallel(n_jobs=4)(
+            # Parallelize over sigmas and collect results
+            results = Parallel(n_jobs=4)(
                 delayed(self._process_sigma)(sigma, features, self.model_name) for sigma in self.sigmas
             )
+
+            # Aggregate evaluation results
+            for flattened_metrics in results:
+                if flattened_metrics:
+                    self.all_metrics.extend(flattened_metrics)
