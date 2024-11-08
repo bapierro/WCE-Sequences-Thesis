@@ -217,7 +217,7 @@ def main(log_dir, output_dir):
     legend2 = ax.legend(
         handles=metrics_handles,
         title='Phase',
-        bbox_to_anchor=(1.05, 0.7),
+        bbox_to_anchor=(1.05, 0.65),
         loc='upper left',
         borderaxespad=0.
     )
