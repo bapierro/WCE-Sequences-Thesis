@@ -5,12 +5,8 @@ import os
 from datetime import datetime
 
 
-base_path = "../evaluation_data/kvasir_capsule_sequences/selection/selection"
-print(os.path.curdir)
-print(os.path.pardir)
+base_path = "../evaluation_data/AnnotatedVideos_30FPS"
 folders = [f.path for f in os.scandir(base_path) if f.is_dir()]
-# minCLs = [30,50,100,150,200,250,300,350,400,450,500]
-
 
 from wce_clustering_v2 import WCECluster
 from model_name import Model
@@ -22,8 +18,8 @@ from datetime import datetime
 import shutil
 
 # Function to generate a unique run ID based on the current timestamp
-def generate_run_id(name):
-    return name + "_" + datetime.now().strftime("%Y%m%d_%H%M%S")
+def generate_run_id():
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 def plot_metrics(csv_file, metrics, output_dir, dir_name):
     """
@@ -53,18 +49,18 @@ def plot_metrics(csv_file, metrics, output_dir, dir_name):
         # 'Density-Based Clustering Validation Index':'DBCVI',
         "nmi":"NMI",
         "ari":"ARI",
-        'Density Based Clustering Validation Index': "DBCVI"
+        'Silhouette Coefficient': "Silhouette"
         
     }
 
     # Determine the number of rows and columns for subplots
-    max_cols = 2
+    max_cols = 3
     num_metrics = len(metrics)
     num_cols = min(num_metrics, max_cols)
     num_rows = (num_metrics + max_cols - 1) // max_cols  # Ceiling division
 
     # Initialize the plot with subplots for each metric
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=(23,22))
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=(14,22))
     # fig.suptitle(f'Evaluation', fontsize=16)
 
     # Flatten axes array for easy iteration
@@ -373,19 +369,13 @@ def cleanup_previous_runs(base_dir, keep_recent=5):
         except Exception as e:
             print(f"Error removing {run_path}: {e}")
 
-def run_evaluation(cb=None,name="",recompute = False,draw_plot = False,save_reps=False):
-    """
-    Executes the entire evaluation process. If a callback `cb` is provided, it will be called
-    at specific points during the evaluation.
-
-    :param cb: A callback function to be executed at specific points. Default is None.
-    """
+if __name__ == "__main__":
     # Generate a unique run ID
-    run_id = generate_run_id(name)
+    run_id = generate_run_id()
     print(f"Starting run with ID: {run_id}")
 
     # Define base directories for outputs
-    dumps_root = os.path.join("./dumps", "subsection", run_id)
+    dumps_root = os.path.join("./dumps", "DownsampledVideos", run_id)
     evaluation_unsupervised_path = os.path.join(dumps_root, "Evaluation_Unsupervised")
     os.makedirs(evaluation_unsupervised_path, exist_ok=True)
 
@@ -393,46 +383,35 @@ def run_evaluation(cb=None,name="",recompute = False,draw_plot = False,save_reps
     # Uncomment the following line to activate cleanup
     # cleanup_previous_runs(os.path.join("./dumps", "subsection"), keep_recent=5)
 
-    # Define the base_path dynamically or pass it as a parameter
-    base_path = "../evaluation_data/kvasir_capsule_sequences/selection/selection"
-    folders = [f.path for f in os.scandir(base_path) if f.is_dir()]
-
     # Iterate through folders and apply clustering
     for folder in folders:
-        section_name = os.path.basename(folder)
         print("-----------------------")
-        print(f"Section: {section_name}")
+        print(f"Section: {os.path.basename(folder)}")
 
         WCECluster(
             dataset_path=folder,
             batch_size=64,
             smooth=True,
-            draw_plot=draw_plot,
-            fps=30,
-            recompute=recompute,
+            fps=1,
+            recompute=True,
             backbones=[Model.CENDO_FM,Model.ENDO_FM,Model.Swin_v2_B,Model.RES_NET_50],
             evaluate=True,
-            save_representatives=save_reps,
-            sigmas=[1],
-            external_validation=True,
-            run_id=run_id,
-            output_root=dumps_root,
-            cendo_backbone=cb
+            save_representatives=True,
+            sigmas=[5],
+            external_validation=False,
+            run_id=run_id,  
+            output_root=dumps_root 
         ).apply()
-
 
     # Merge evaluation CSVs
     merged_results = merge_model_evaluation_csvs(evaluation_unsupervised_path)
 
     # Define metrics to include
     metrics_to_include = [
-        'accuracy',
         "Davies-Bouldin Index",
-        'nmi',
         'Calinski–Harabasz Index',
-        'ari',
-        "Density Based Clustering Validation Index"
-    ]
+        "Silhouette Coefficient"
+        ]
 
     best_metric = "Calinski–Harabasz Index"
 
@@ -456,7 +435,6 @@ def run_evaluation(cb=None,name="",recompute = False,draw_plot = False,save_reps
         combined_df.to_csv(output_path, index=False)
         print(f"Saved combined results to {output_path}")
 
-
     # Collect best performances
     best_results_df = collect_best_performances(experiments_root, metrics=metrics_to_include, best_metric=best_metric)
 
@@ -475,17 +453,10 @@ def run_evaluation(cb=None,name="",recompute = False,draw_plot = False,save_reps
         print(f"The best performances have been saved to {output_csv_path}")
     except Exception as e:
         print(f"Error saving CSV for {best_metric}: {e}")
-        
+
     # Define output plots directory
     output_plots_dir = os.path.join("BestPerformances_Plots", run_id)
     os.makedirs(output_plots_dir, exist_ok=True)
 
     # Plot metrics boxplots
     process_directories(bestperformances_root, metrics_to_include, output_plots_dir)
-    
-    print("Evaluation run completed successfully.")
-
-
-if __name__ == "__main__":
-
-    run_evaluation(cb=None,recompute=False,name="BestPerformingCJ")

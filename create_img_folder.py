@@ -9,7 +9,7 @@ parser.add_argument("f",help="fps", default=30)
 args = parser.parse_args()
 
 # Get the list of all MP4 files in the provided directory
-video_dir = args.d
+video_dir = args.d  
 mp4_files = [f for f in os.listdir(video_dir) if f.endswith(".mp4")]
 fps = args.f
 

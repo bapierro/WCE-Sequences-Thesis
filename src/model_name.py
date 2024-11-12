@@ -11,5 +11,8 @@ class Model(Enum):
     DEPTH_ANY_SMALL = 7
     DEPTH_ANY_BASE = 8
     DEPTH_ANY_LARGE = 9
-    CENDO_FM = 10
+    CENDO_FM = 10,
+    Swin_v2_B  = 11,
+    
+    
     

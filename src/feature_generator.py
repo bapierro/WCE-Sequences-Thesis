@@ -2,7 +2,7 @@ import os
 import torch
 import torch.nn as nn
 from torchvision.models import (
-    resnet18, resnet34, resnet50, resnet101, resnet152
+    resnet18, resnet34, resnet50, resnet101, resnet152, swin_v2_b
 )
 from model_name import Model
 from EndoFM import vision_transformer
@@ -10,7 +10,7 @@ from Depth_Anything_V2.depth_anything_v2.dpt import DepthAnythingV2
 
 import pytorch_lightning as pl  # Import PyTorch Lightning if needed
 
-DEVICE = 'cuda:2' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+DEVICE = 'cuda:3' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
 
 depth_anything_model_configs = {
     'vits': {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]},
@@ -28,15 +28,19 @@ class FeatureGenerator:
         pretrained=True,
         img_size=224,
         student=False,
+        cb = None
     ):
         self.model = self._get_model(
-            model_name, pretrained, img_size, student=student
+            model_name, pretrained, img_size, student=student,cb=cb
         ).to(DEVICE)
         
     def _get_model(
-        self, model_name: Model, pretrained, img_size, student
+        self, model_name: Model, pretrained, img_size, student,cb
     ):
         match model_name:
+            case Model.Swin_v2_B:
+                model = swin_v2_b(weights='DEFAULT' if pretrained else None)
+            
             case Model.RES_NET_18:
                 model = resnet18(weights='DEFAULT' if pretrained else None)
             case Model.RES_NET_34:
@@ -87,12 +91,24 @@ class FeatureGenerator:
                 #checkpoint_path = "checkpoints_HeavyAugment/dino-epoch=109-val_loss=5.76.ckpt" # Mehr local views FPS->13
                 #checkpoint_path = "checkpoints_KeinCJAberGaussHeavy8GPU/dino-epoch=179-val_loss=5.83.ckpt" # KeinCJ aber straker gauß FPS-->9
                 #checkpoint_path = "checkpoints_HeavyAugmentLowLR/dino-epoch=74-val_loss=5.20.ckpt" 
-                checkpoint_path = "checkpoints_HeavyAugmentLowLR_OVERLAPPING_CROPS_4Views/dino-epoch=59-val_loss=4.85.ckpt"
+                # checkpoint_path = "checkpoints_HeavyAugmentLowLR_OVERLAPPING_CROPS_4Views/dino-epoch=59-val_loss=4.85.ckpt" <----
                 #checkpoint_path = "checkpoints_HeavyAugmentLowLR_OVERLAPPING_CROPS_6Views/dino-epoch=69-val_loss=4.92.ckpt"
                 #checkpoint_path = "checkpoints_HeavyAugment_NoCJ/dino-epoch=79-val_loss=4.08.ckpt"# KeinCJ
                 #checkpoint_path = "checkpoints_HeavyAugmentBigLocalVies/dino-epoch=89-val_loss=4.71.ckpt"# biggerLocal Views
                 # checkpoint_path = "checkpoints_LightAugmentsDinoEsque/dino-epoch=44-val_loss=7.98.ckpt"# Basic dino transforms
                 #checkpoint_path = "checkpoints_HeavyAugment_OVERLAPPING_CROPS_4_BigDinoHEAD/dino-epoch=79-val_loss=7.52.ckpt"
+                # checkpoint_path = "checkpoints_Larger OC/dino-epoch=69-val_loss=4.75.ckpt" # 
+                # checkpoint_path = "checkpoints_GlobalEqLocalCrop6LV/dino-epoch=59-val_loss=4.69.ckpt" #<--- Bestes atm
+                # checkpoint_path = "./checkpoints_GlobalEqLocalCrop/dino-epoch=64-val_loss=4.70.ckpt"
+                # checkpoint_path = "/checkpoints_GlobalEqLocalCropBigLovalView/dino-epoch=74-val_loss=3.53.ckpt"
+                # checkpoint_path = "checkpoints_AdjustedHyperparams/dino-epoch=64-val_loss=4.50.ckpt"
+                # checkpoint_path = "./checkpoints_AdjustedHyperparams_Freeze/dino-epoch=44-val_loss=4.00.ckpt"
+                # checkpoint_path = "checkpoints_AdjustedHyperparams_Freeze_HeavierAugs/dino-epoch=74-val_loss=6.71.ckpt" 
+                # checkpoint_path = "checkpoints_AdjustedHyperparams_Freeze_HeaviestAug/dino-epoch=114-val_loss=6.03.ckpt"#<--- BEstes atm
+                checkpoint_path = "checkpoints_AdjustedHyperparams_Freeze_HeaviestAug_HeavyColorJitter/dino-epoch=229-val_loss=6.02.ckpt"
+                if cb:
+                    checkpoint_path = cb
+                    
                 if not os.path.isfile(checkpoint_path):
                     raise FileNotFoundError(f"Checkpoint file not found at {checkpoint_path}")
                 
@@ -120,11 +136,12 @@ class FeatureGenerator:
             Model.DEPTH_ANY_SMALL,
             Model.DEPTH_ANY_BASE,
             Model.DEPTH_ANY_LARGE,
-            Model.CENDO_FM  # Ensure CENDO_FM is excluded if needed
+            Model.CENDO_FM,
+            Model.Swin_v2_B
         ):
             model = nn.Sequential(*list(model.children())[:-1])
         
-        model = nn.DataParallel(model,device_ids=[2])
+        model = nn.DataParallel(model,device_ids=[3,4,5])
         return model
             
     def _init_weights(self, m):

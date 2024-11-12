@@ -19,7 +19,7 @@ from vision_transformer import VisionTransformer
 from seeai_datamodule import SEEAIDataModule
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.strategies import DDPStrategy  # Import DDPStrategy
-
+from generateEval import run_evaluation
 import yaml
 
 parser = argparse.ArgumentParser("DINO Training")
@@ -36,7 +36,9 @@ class DINO(pl.LightningModule):
         vitb16_s = VisionTransformer(img_size=[img_size])
         vitb16_t = copy.deepcopy(vitb16_s)
         input_dim = vitb16_s.embed_dim
+
         if pretrained:
+            # Load pre-trained student weights
             state_dict_s = torch.load(
                 "./EndoFM/endo_fm.pth", map_location=torch.device('cpu'))["student"]
             new_state_dict_s = {}
@@ -46,6 +48,9 @@ class DINO(pl.LightningModule):
                     new_state_dict_s[new_key] = v
                 else:
                     new_state_dict_s[k] = v
+            vitb16_s.load_state_dict(new_state_dict_s, strict=False)
+
+            # Load pre-trained teacher weights
             state_dict_t = torch.load(
                 "./EndoFM/endo_fm.pth", map_location=torch.device('cpu'))["teacher"]
             new_state_dict_t = {}
@@ -55,8 +60,6 @@ class DINO(pl.LightningModule):
                     new_state_dict_t[new_key] = v
                 else:
                     new_state_dict_t[k] = v
-
-            vitb16_s.load_state_dict(new_state_dict_s, strict=False)
             vitb16_t.load_state_dict(new_state_dict_t, strict=False)
 
         self.student_backbone = vitb16_s
@@ -91,6 +94,19 @@ class DINO(pl.LightningModule):
         self.base_momentum = self.config['momentum_schedule']['base_momentum']
         self.final_momentum = self.config['momentum_schedule']['final_momentum']
         self.max_epochs = self.config['training']['epochs']
+
+        for param in self.student_backbone.patch_embed.parameters():
+            param.requires_grad = False
+            
+        for block in self.student_backbone.blocks:
+            # Freeze FFN layers
+            for param in block.mlp.parameters():
+                param.requires_grad = False
+
+        for idx, block in enumerate(self.student_backbone.blocks):
+            for param in block.attn.parameters():
+                assert param.requires_grad == True, f"MHSA parameters in block {idx} should be trainable."
+
 
     def forward(self, x) -> Any:
         x = self.student_backbone(x).flatten(start_dim=1)
@@ -165,7 +181,7 @@ if __name__ == "__main__":
     # Define callbacks
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor='val_loss',
-        save_top_k=3,
+        save_top_k=1,
         mode='min',
         dirpath=f'./checkpoints_{config["name"]}/',
         filename='dino-{epoch:02d}-{val_loss:.2f}',
@@ -213,8 +229,11 @@ if __name__ == "__main__":
         logger=logger,
         enable_progress_bar=True,
         accumulate_grad_batches=accumulate_grad_batches,
-        log_every_n_steps= 25 if len(config["devices"]) == 8 else 50
+        log_every_n_steps= 25 if len(config["devices"]) == 8 else 50,
     )
 
     # Start training
-    trainer.fit(model, datamodule=dataset)
+    trainer.fit(model, datamodule=dataset,ckpt_path="./checkpoints_AdjustedHyperparams_Freeze_HeaviestAug_HeavyColorJitter/dino-epoch=134-val_loss=6.29.ckpt")
+    
+    run_evaluation(cb=checkpoint_callback.best_model_path,name=config["name"],recompute=True,draw_plot=True,save_reps=True)
+    

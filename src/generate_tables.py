@@ -106,10 +106,11 @@ def generate_latex_table(csv_file, metrics):
 
     # Adjust the model names in the column headers to match those in the CSV
     df.columns = df.columns.str.replace('ENDO_FM', 'EndoFM')
+    df.columns = df.columns.str.replace('CENDO_FM', 'CendoFM')
     df.columns = df.columns.str.replace('RES_NET_101', 'ResNet101')
 
     # List of models to include in the table
-    models = ['EndoFM', 'ResNet101']
+    models = ['EndoFM', 'ResNet101','CendoFM']
 
     # Adjust dataset names to remove underscores and hyphens (e.g., 'ncm_1' to 'ncm1')
     df['Dataset'] = df['Dataset'].str.replace('_', '').str.replace('-', '')
