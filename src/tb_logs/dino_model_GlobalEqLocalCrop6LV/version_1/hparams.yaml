@@ -5,8 +5,8 @@ config:
   seed: 23
   name: GlobalEqLocalCrop6LV
   devices:
-  - 3
-  - 4
+  - 5
+  - 7
   training:
     epochs: 300
     batch_size: 16

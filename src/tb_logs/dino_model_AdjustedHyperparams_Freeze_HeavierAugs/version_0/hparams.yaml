@@ -3,10 +3,13 @@ config:
   val_path: ~/deep_clustering_for_wce/src/dumps/kid_validation
   img_size: 224
   seed: 23
-  name: GlobalEqLocalCrop6LV
+  name: AdjustedHyperparams_Freeze_HeavierAugs
   devices:
   - 3
   - 4
+  - 5
+  - 6
+  - 7
   training:
     epochs: 300
     batch_size: 16
@@ -39,13 +42,13 @@ config:
   transforms:
     global_crop_size: 224
     global_crop_scale:
-    - 0.3
+    - 0.8
     - 1.0
     local_crop_size: 160
     local_crop_scale:
-    - 0.3
+    - 0.5
     - 1.0
-    n_local_views: 6
+    n_local_views: 4
     hf_prob: 0.7
     vf_prob: 0.7
     rr_prob: 0.7
