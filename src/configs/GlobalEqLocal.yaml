@@ -5,8 +5,8 @@ path: "~/deep_clustering_for_wce/src/dumps/see_ai_processed_training"
 val_path: "~/deep_clustering_for_wce/src/dumps/kid_validation"
 img_size: 224  # Reduced from 336 to manage computational load
 seed: 23
-name: "GlobalEqLocalCropBigLovalView_complete_run"
-devices: [3,4,5]  # Update based on available GPUs
+name: "GlobalEqLocalCrop4LV"
+devices: [5,7]  # Update based on available GPUs
 
 # Training parameters
 training:
@@ -49,7 +49,7 @@ transforms:
   global_crop_scale: [0.6, 1.0]
   local_crop_size: 160 
   local_crop_scale: [0.6, 1.0]
-  n_local_views: 4
+  n_local_views: 6
   hf_prob: 0.7
   vf_prob: 0.7
   rr_prob: 0.7
