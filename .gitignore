@@ -11,3 +11,8 @@ lightning_logs
 stl10_binary
 src/datasets/**
 evaluation_data/**
+src/UnsupervisedEvaluation_10FPS
+src/UnsupervisedEvaluation_3FPS
+src/Experiments/
+src/BestPerformances
+src/BestPerformances_Plots
