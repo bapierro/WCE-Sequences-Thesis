@@ -16,3 +16,5 @@ src/UnsupervisedEvaluation_3FPS
 src/Experiments/
 src/BestPerformances
 src/BestPerformances_Plots
+results/
+kvasir_capsule_sequences

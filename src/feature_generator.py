@@ -141,7 +141,7 @@ class FeatureGenerator:
         ):
             model = nn.Sequential(*list(model.children())[:-1])
         
-        model = nn.DataParallel(model,device_ids=[3,4,5])
+        # model = nn.DataParallel(model,device_ids=[3,4,5])
         return model
             
     def _init_weights(self, m):

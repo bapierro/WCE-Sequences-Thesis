@@ -2,5 +2,11 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/66325a5470b0d03d58e3d20e" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/report/66325a5470b0d03d58e3d20e" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/Depth_Anything_V2" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/SeCu" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/Unsupervised-Classification" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/swav" vcs="Git" />
   </component>
 </project>

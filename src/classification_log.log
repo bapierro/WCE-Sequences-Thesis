@@ -1,0 +1,7 @@
+2024-11-17 20:45:55,627 - INFO - Using device: mps
+2024-11-17 20:46:20,107 - INFO - Using device: mps
+2024-11-17 20:47:17,999 - INFO - Initialized FeatureGenerator for CendoFM
+2024-11-17 20:47:18,000 - INFO - Initialized FeatureGenerator for EndoFM
+2024-11-17 20:47:18,000 - INFO - Initialized FeatureGenerator for Swin
+2024-11-17 20:47:18,000 - INFO - Initialized FeatureGenerator for ResNet50
+2024-11-17 20:47:18,000 - INFO - Extracting features for CendoFM on training data with EndoFM normalization...
