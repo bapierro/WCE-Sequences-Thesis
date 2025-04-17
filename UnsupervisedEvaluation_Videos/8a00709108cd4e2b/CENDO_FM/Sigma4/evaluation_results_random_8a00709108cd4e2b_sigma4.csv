@@ -1,2 +1,0 @@
-method,sigma,minCl,minSpl,temporal_purity,silhouette_score,intercluster_distance,intracluster_distance
-Random,4,300,1,0.0023233778168796153,-0.013431012,0.011513868,11.6315975

@@ -19,7 +19,7 @@ def list_tensorboard_tags(log_dir):
     return tags
 
 if __name__ == "__main__":
-    log_dir = "tb_logs"  # Replace with your actual log directory
+    log_dir = "tb_logs" 
     tags = list_tensorboard_tags(log_dir)
     print("Available TensorBoard Tags:")
     for tag in sorted(tags):

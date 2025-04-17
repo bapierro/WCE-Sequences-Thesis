@@ -1,44 +1,40 @@
 import numpy as np
-from sklearn.metrics import pairwise_distances
-from scipy.spatial.distance import cdist
-from ._hdbscan_linkage import mst_linkage_core
-from .hdbscan_ import isclose
 from scipy.special import logsumexp
 
-# def all_points_core_distance(distance_matrix, d=2.0):
-#     """
-#     Compute the all-points-core-distance for all the points of a cluster.
+def all_points_core_distance(distance_matrix, d=2.0):
+    """
+    Compute the all-points-core-distance for all the points of a cluster.
 
-#     Parameters
-#     ----------
-#     distance_matrix : array (cluster_size, cluster_size)
-#         The pairwise distance matrix between points in the cluster.
+    Parameters
+    ----------
+    distance_matrix : array (cluster_size, cluster_size)
+        The pairwise distance matrix between points in the cluster.
 
-#     d : integer
-#         The dimension of the data set, which is used in the computation
-#         of the all-point-core-distance as per the paper.
+    d : integer
+        The dimension of the data set, which is used in the computation
+        of the all-point-core-distance as per the paper.
 
-#     Returns
-#     -------
-#     core_distances : array (cluster_size,)
-#         The all-points-core-distance of each point in the cluster
+    Returns
+    -------
+    core_distances : array (cluster_size,)
+        The all-points-core-distance of each point in the cluster
 
-#     References
-#     ----------
-#     Moulavi, D., Jaskowiak, P.A., Campello, R.J., Zimek, A. and Sander, J.,
-#     2014. Density-Based Clustering Validation. In SDM (pp. 839-847).
-#     """
-#     distance_matrix[distance_matrix != 0] = (1.0 / distance_matrix[
-#         distance_matrix != 0]) ** d
-#     result = distance_matrix.sum(axis=1)
-#     result /= distance_matrix.shape[0] - 1
+    References
+    ----------
+    Moulavi, D., Jaskowiak, P.A., Campello, R.J., Zimek, A. and Sander, J.,
+    2014. Density-Based Clustering Validation. In SDM (pp. 839-847).
+    """
+    distance_matrix[distance_matrix != 0] = (1.0 / distance_matrix[
+        distance_matrix != 0]) ** d
+    result = distance_matrix.sum(axis=1)
+    result /= distance_matrix.shape[0] - 1
 
-#     if result.sum() == 0:
-#         result = np.zeros(len(distance_matrix))
-#     else:
-#         result **= (-1.0 / d)
+    if result.sum() == 0:
+        result = np.zeros(len(distance_matrix))
+    else:
+        result **= (-1.0 / d)
 
-#     return result
+    return result
 
 
 def all_points_core_distance(distance_matrix, d=2.0):
@@ -461,3 +457,123 @@ def validity_index(X, labels, metric='euclidean',
         return result, cluster_validity_indices
     else:
         return result
+
+
+
+
+import numpy as np
+from scipy.special import logsumexp
+
+
+def all_points_core_distance_naive(distance_matrix, d=2.0):
+    """
+    Compute the all-points-core-distance for all the points of a cluster (naive version).
+    This version modifies the input distance_matrix in-place. It is susceptible to
+    numerical instability when dealing with very small distances raised to large powers.
+
+    Parameters
+    ----------
+    distance_matrix : array (cluster_size, cluster_size)
+        The pairwise distance matrix between points in the cluster.
+
+    d : float
+        The dimension of the data set, used in the computation of the all-point-core-distance.
+
+    Returns
+    -------
+    core_distances : array (cluster_size,)
+        The all-points-core-distance of each point in the cluster.
+    """
+    # Avoid dividing by zero: indices where distance_matrix != 0
+    mask = (distance_matrix != 0)
+    distance_matrix[mask] = (1.0 / distance_matrix[mask]) ** d
+    result = distance_matrix.sum(axis=1)
+    result /= distance_matrix.shape[0] - 1
+
+    if result.sum() == 0:
+        result = np.zeros(len(distance_matrix))
+    else:
+        result **= (-1.0 / d)
+
+    return result
+
+
+def all_points_core_distance_log_stable(distance_matrix, d=2.0):
+    """
+    Compute the all-points-core-distance for all the points of a cluster without numerical overflow,
+    by using logarithms for increased numerical stability.
+
+    Parameters
+    ----------
+    distance_matrix : array (cluster_size, cluster_size)
+        The pairwise distance matrix between points in the cluster.
+
+    d : float
+        The dimension of the data set, which is used in the computation
+        of the all-point-core-distance as per the paper.
+
+    Returns
+    -------
+    core_distances : array (cluster_size,)
+        The all-points-core-distance of each point in the cluster.
+    """
+    N = distance_matrix.shape[0]
+    # Copy the distance matrix so we don't modify the original
+    dists = distance_matrix.copy().astype(float)
+
+    # Replace zero distances (self-distances) with NaN for safe log
+    dists[dists == 0] = np.nan
+
+    # s_{ij} = -d * log(d_{ij})
+    # If d_{ij} is NaN (where originally zero), this will remain NaN, and we'll handle it by excluding these diagonals
+    s_ij = -d * np.log(dists)
+    
+    # Exclude self-distances by setting s_{ii} = -inf (logsumexp will ignore them)
+    np.fill_diagonal(s_ij, -np.inf)
+
+    # Compute log(S_i) for each point using logsumexp
+    # S_i = sum over j of (1/d_{ij})^d = sum over j of exp(-d * log(d_{ij}))
+    # log_S_i = log(sum_j exp(s_ij))
+    log_S_i = logsumexp(s_ij, axis=1)
+
+    # m_i = S_i/(N-1), so log_m_i = log(S_i) - log(N-1)
+    log_m_i = log_S_i - np.log(N - 1)
+
+    # apcd_i = (m_i)^{-1/d}, so log_apcd_i = - (1/d) * log_m_i
+    log_apcd_i = - (1.0 / d) * log_m_i
+
+    # Exponentiate to get back apcd_i
+    apcd_i = np.exp(log_apcd_i)
+
+    # Handle any infinities or NaNs that may have arisen
+    apcd_i[np.isinf(apcd_i)] = 0
+    apcd_i[np.isnan(apcd_i)] = 0
+    
+    return apcd_i
+
+
+if __name__ == "__main__":
+    # Generate a synthetic distance matrix for testing.
+    # We'll create a random symmetric distance matrix with zeros on the diagonal.
+    np.random.seed(42)
+    N = 10
+    rand_points = np.random.rand(N, 2)  # 2D points for simplicity
+    dist_matrix = np.sqrt(((rand_points[:, None] - rand_points[None, :])**2).sum(axis=2))
+
+    # Make sure diagonal is zero
+    np.fill_diagonal(dist_matrix, 0.0)
+
+    # Compute both versions
+    # Note: The naive version modifies the distance_matrix in-place, so we pass a copy to avoid affecting comparisons.
+    naive_result = all_points_core_distance_naive(dist_matrix.copy(), d=2.0)
+    stable_result = all_points_core_distance_log_stable(dist_matrix, d=2.0)
+
+    # Compare the results
+    print("Naive result:  ", naive_result)
+    print("Stable result: ", stable_result)
+
+    # Check if they are close
+    if np.allclose(naive_result, stable_result, rtol=1e-5, atol=1e-8):
+        print("The two implementations produce similar results.")
+    else:
+        print("The two implementations differ significantly.")

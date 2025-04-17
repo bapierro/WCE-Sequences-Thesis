@@ -1,3 +1,0 @@
-method,sigma,minCl,minSpl,temporal_purity,silhouette_score,davies_bouldin_index,calinski_harabasz_index,intercluster_distance,intracluster_distance,intra_cluster_variance,transition_count,average_segment_length
-RES_NET_101_HDBSCAN,4,300,1,0.9977766227766227,0.04147968,2.9681929360512003,1029.2807910424606,0.42610604,4.1188297,2.3592029,58,450.76271186440675
-RES_NET_101_Random_Segmentation,4,300,1,1.0,-0.03723834,3.161346660600266,699.8028800584268,0.14706495,3.885626,2.3641639,35,738.75
